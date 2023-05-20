@@ -1,0 +1,114 @@
+---
+title: "Untitled"
+author: "chc"
+date: "2023-05-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(reticulate)
+py_available()#[1] FALSE  #检查您的系统是否安装过Python
+# use_condaenv("D:/Program Files (x86)/Anaconda3")
+ 
+
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/chcww/AppData/Local/Programs/Python/Python310/python.exe")
+
+py_config()#安装的python版本环境查看，显示anaconda和numpy的详细信息。
+py_available()#[1] TRUE   #检查您的系统是否安装过Python
+py_module_available("pymssql")#检查“pandas”是否安装
+# install.packages("xgboost")
+library(xgboost)
+```
+
+```{python}
+import pandas as pd
+dirThis = 'C:\\Users\\chcww\\Downloads\\'
+use = pd.read_csv(dirThis + 'use.csv')
+kk = 1
+```
+
+```{r}
+pip = T
+py_install("pymssql", pip = T)
+```
+
+```{python}
+from crucio import MTDF, SMOTE, ADASYN, ICOTE, MWMOTE, TKRKNN 
+from category_encoders import *
+import sys
+sys.path.append(r'C:\\vs_code_python')
+from datetime import datetime
+from functionNew import *
+import pandas as pd
+import time
+import gc
+
+dirThis = 'C://Users//chcww//Downloads//'
+offers = pd.read_csv(dirThis + 'offers.csv')
+trainHistory = pd.read_csv(dirThis + 'trainHistory.csv')
+testHistory = pd.read_csv(dirThis + 'testHistory.csv')
+transactions = dirThis + 'transactions.csv'
+file1 = dirThis + 'outputSQL//'
+
+```
+
+
+```{r}
+model <- xgboost::xgb.load('C:/Users/chcww/Downloads/withoutEncoder.json')
+test <- py$use[1:160000, -c(1, 5)]
+
+dtest <- xgboost::xgb.DMatrix(
+    data = as.matrix(test)
+)
+
+y_proba_test <- predict(model, dtest)
+```
+
+```{r}
+s <- sort(y_proba_test)
+plot(s)
+```
+
+```{r}
+dtrain <- xgboost::xgb.DMatrix(
+    data = as.matrix(X_train),
+    label = y_train
+)
+dtest <- xgboost::xgb.DMatrix(
+    data = as.matrix(X_test),
+    label = y_test
+)
+
+y_proba_train <- predict(model, dtrain)
+y_proba_test <- predict(model, dtest)
+
+auroc <- function(y_true, y_proba) {
+    n1 <- sum(!y_true)
+    n2 <- sum(y_true)
+    U  <- sum(rank(y_proba)[!y_true]) - n1 * (n1 + 1) / 2
+    return(1 - U / n1 / n2)
+}
+
+print(auroc(y_train, y_proba_train))
+print(auroc(y_test, y_proba_test))
+# 0.9989149 and 1, respectively, which is exactly what we saw in Python
+
+# We can even compare the predicted probabilities to ensure they're basically equal
+y_proba_train_python <- as.numeric(read.table('y_proba_train_python.txt')$V1)
+y_proba_test_python <- as.numeric(read.table('y_proba_test_python.txt')$V1)
+
+mean(y_proba_train - y_proba_train_python)
+mean(y_proba_test - y_proba_test_python)
+```
+
+
+
+
+
+
+

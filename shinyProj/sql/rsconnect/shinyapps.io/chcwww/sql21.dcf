@@ -1,0 +1,13 @@
+name: sql21
+title: sql21
+username:
+account: chcwww
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 9035102
+bundleId: 7177775
+url: https://chcwww.shinyapps.io/sql21/
+when: 1683280000.11085
+lastSyncTime: 1683280000.11085
+asMultiple: FALSE
+asStatic: FALSE

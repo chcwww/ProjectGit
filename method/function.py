@@ -232,7 +232,7 @@ class dataLoader() :
     # self.data.drop(['id', 'offerdate'], axis = 1, inplace = True)
     smalltrain = self.data.loc[id2.isin(id1), :].set_index("id")
     self.ttest = self.data.loc[id2.isin(idk), :].set_index("id")
-    self.stdCols = self.data.columns[4:]
+    self.stdCols = self.data.columns[5:]
 
     self.train, self.test, self.target, self.testTarget = \
       train_test_split(smalltrain.reset_index().sort_values(by=['id']).set_index("id"),
@@ -240,7 +240,7 @@ class dataLoader() :
                       test_size = ratio, random_state = seed, 
                       stratify = smalltarget.reset_index().sort_values(by=['id']).set_index("id"))
 
-    self.encol = ['market', 'offer', 'chain', 'offervalue']
+    self.encol = ['market', 'offer', 'chain']
 
 
   def Encoder(self, encode) :
@@ -331,10 +331,10 @@ class dataLoader() :
   def getKaggle(self) :
     return self.tttest
   def getSet(self, encode = 'ordinal', st = 'none', over = 'none') :
-    self.trainSet = self.train.copy().reset_index(drop = True)
-    self.testSet = self.test.copy().reset_index(drop = True)
+    self.trainSet = self.train.copy().reset_index(drop = True).drop(['offerdate'], axis = 1)
+    self.testSet = self.test.copy().reset_index(drop = True).drop(['offerdate'], axis = 1)
     self.targetSet = self.target.copy().reset_index(drop = True)['repeater']
-    self.tttest = self.ttest.copy()
+    self.tttest = self.ttest.copy().drop(['offerdate'], axis = 1)
     if(encode != 'none') :
       self.Encoder(encode)
     if(st != 'none') :
@@ -342,15 +342,18 @@ class dataLoader() :
     if(over != 'none') :
       self.Oversampling(over)
 
-    return self.trainSet.drop(['offerdate'], axis = 1), \
-      self.testSet.drop(['offerdate'], axis = 1), \
-        self.targetSet, self.testTarget.reset_index(drop = True)['repeater']
+    return self.trainSet, self.testSet,  self.targetSet, self.testTarget.reset_index(drop = True)['repeater']
   
 
 
   # if __name__ == '__main__' :
-  #     # newdata = dataLoader(use.reset_index())
-  #     # trainOriginal = newdata.getTrain()
+  #     use =  pd.read_csv('C://Users//chcww//Downloads//use.csv')
+  #     newdata = dataLoader(use.reset_index(drop = True))
+  #     trainOriginal = newdata.getTrain()
   #     # testOriginal = newdata.getTest()
   #     # targetOriginal = newdata.getTarget()
-  #     # data = newdata.getData()
+  #     data = newdata.getData()
+  #     encode = 'onehot'
+  #     st = 'std'
+  #     over = 'none'
+  #     X_train, X_test, y_train, y_test = newdata.getSet(encode = encode, st = st, over = over)

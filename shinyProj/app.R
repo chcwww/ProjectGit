@@ -24,6 +24,7 @@ library(DT)
 # write.csv(D1, "newuse.csv", row.names=FALSE)
 
 fread('realusee.csv') -> K
+K$offer <- as.character(unlist(K$offer))
 D1 <- K
 D1[,'month'] <- paste0(substr(D1$offerdate, 6, 7),"mon")
 
@@ -48,6 +49,16 @@ ggPCA = function(pca, dim=1:2, col="black", k=0.5, b=1.05) {
   list(gplot=gp, data=dx)
 }
 
+shapes = c(6:14, 17, 18)[-5]
+
+EMPC <- read.csv("EMPCOriginal.csv", header=T)[, -1]
+sdf <- as.data.frame(strsplit(EMPC$name, "_"))
+EMPC$encode <- as.character(sdf[1, ])
+EMPC$st <- as.character(sdf[2, ])
+
+EMP <- read.csv("EMPCResample.csv", header=T)[, -1]
+sdf <- as.data.frame(strsplit(EMP$name, "_"))
+EMP$re <- as.character(sdf[1, ])
 
 
 ui<-dashboardPage(
@@ -61,6 +72,7 @@ ui<-dashboardPage(
                               menuSubItem(p('Data Table'), tabName = 'Dtreat'),
                               menuSubItem(p('Descriptive Statistics'), tabName = 'Ggexample')),
                      menuItem(strong("PCA Interactive Plot"), tabName = 'pca', icon = icon('rocket')),
+                     menuItem(strong("Combination Constrast"), tabName = 'combplot', icon = icon('star')),
                      menuItem(strong("Upload File"), tabName = 'upload', icon = icon('ghost'))
                    )),
   dashboardBody(
@@ -83,7 +95,9 @@ ui<-dashboardPage(
                     h3(strong('📖Department')),
                     a(h4("NTPU STAT"),href = "https://www.stat.ntpu.edu.tw/"),
                     h3(strong('🤵Advisor')),
-                    a(h4("王鴻龍"),href = "http://www.aacsb.ntpu.edu.tw/teach/teachsta.php?teacher=NDY3ODBf546L6bS76b6N"),
+                    a(h4("###"),href = "https://www.stat.ntpu.edu.tw/page.php?id=4&ids=1"),
+                    h3(strong('⌨Github')),
+                    a(h4("https://github.com/chcwww/ProjectGit"),href = "https://github.com/chcwww/ProjectGit"),
                     width = 7
                   )
                 )
@@ -153,6 +167,8 @@ ui<-dashboardPage(
                                 round(summary(D1$buy_total_CT)[[5]])), 10),
                   hr(),
                   sliderInput("cos2","Cos2 Mask", 0, 1, 0, 0.05),
+                  actionButton("action", label = "繪製"),
+                  hr(),
                   width = 5
                 ),
                 column(
@@ -169,11 +185,26 @@ ui<-dashboardPage(
                 ), 
                 
                 column(tabsetPanel(type = "tabs",
-                                   tabPanel("PCA Plot1", value = "tab1",
+                                   tabPanel("PCA Biplot1", value = "tab1",
                                             plotly::plotlyOutput("pca1")
                                    ), 
-                                   tabPanel("PCA Plot2", value = "tab2",
+                                   tabPanel("PCA Biplot2", value = "tab2",
                                             plotly::plotlyOutput("pca2")
+                                   )  
+                ), width = 12
+                )
+              )
+      ),
+      
+      
+      tabItem(tabName = 'combplot',
+              fluidPage(
+                column(tabsetPanel(type = "tabs",
+                                   tabPanel("Contrast1", value = "tab1",
+                                            plotly::plotlyOutput("comb1")
+                                   ), 
+                                   tabPanel("Contrast2", value = "tab2",
+                                            plotly::plotlyOutput("comb2")
                                    )  
                 ), width = 12
                 )
@@ -242,7 +273,7 @@ ui<-dashboardPage(
 
 server<-function(input, output) {
   
-  A = reactive({
+  A <- reactive({
     if(input$amountTotal[1] == 0) {
       k1 <- -9999999
     } else {
@@ -307,82 +338,132 @@ server<-function(input, output) {
     ) -> r.A  
   })
   
+  observeEvent(input$action, {
+    output$cart <- shinydashboard::renderValueBox({
+      shinydashboard::valueBox(
+        "Customers",
+        nrow(isolate(A())),
+        icon = icon("cart-shopping")
+      )
+    }) 
+    
+    
+    output$ply <- renderPlotly({
+      
+      df = as_tibble(genres) %>% setNames(c("offer", "All"))
+      df = isolate(A())$offer %>% unlist %>% table %>% 
+        as_tibble %>% setNames(c("offer", "Select")) %>% 
+        right_join(df) %>% replace(is.na(.), 0) %>% 
+        arrange(desc(All)) %>% 
+        mutate(offer = factor(offer, rev(offer)))
+      
+      gg2 = df %>% gather("key","count",-1) %>%
+        ggplot(aes(offer, count, fill=key)) +
+        geom_col(position="identity",alpha=0.8) +
+        coord_flip() + theme_bw() + labs(fill="") +
+        scale_y_continuous(expand=c(0.02,0.02)) +
+        theme(axis.title=element_blank(),
+              axis.ticks=element_blank()); gg2
+      
+      ggplotly(gg2) %>% layout(
+        legend=list(x=0.7, y=0.05),font=list(family="consolas"),
+        margin=list(l=0, r=20, b=0, t=20, pad=4)
+      )
+      
+    })
+    
+    
+    GPC = reactive({
+      select(isolate(A()), offervalue:buy_total_LT) %>% 
+        PCA(graph=F) %>%
+        ggPCA() -> r.GPC
+    })
+    
+    output$pca1 <- renderPlotly({
+      
+      clrs = c("blue","seagreen","lightyellow","gold",
+               "orange","magenta","red","darkred")
+      
+      gg = GPC()$gp + geom_point(
+        data = cbind(isolate(A()), GPC()$data) %>% filter(cos2 >= input$cos2), 
+        aes(x, y, label = id, size = buy_total_CT
+            , color = buy_category_amount), 
+        alpha=0.65) +
+        scale_color_gradientn(colors=clrs) + theme_bw()
+      
+      ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+        dragmode="pan", font=list(family="consolas"))
+      
+    })
   
-  output$cart <- shinydashboard::renderValueBox({
-    shinydashboard::valueBox(
-      "Customers",
-      nrow(A()),
-      icon = icon("cart-shopping")
-    )
-  }) 
-  
-  
-  output$ply <- renderPlotly({
-    
-    df = as_tibble(genres) %>% setNames(c("offer", "All"))
-    df = A()$offer %>% unlist %>% table %>% 
-      as_tibble %>% setNames(c("offer", "Select")) %>% 
-      right_join(df) %>% replace(is.na(.), 0) %>% 
-      arrange(desc(All)) %>% 
-      mutate(offer = factor(offer, rev(offer)))
-    
-    gg2 = df %>% gather("key","count",-1) %>%
-      ggplot(aes(offer, count, fill=key)) +
-      geom_col(position="identity",alpha=0.8) +
-      coord_flip() + theme_bw() + labs(fill="") +
-      scale_y_continuous(expand=c(0.02,0.02)) +
-      theme(axis.title=element_blank(),
-            axis.ticks=element_blank()); gg2
-    
-    ggplotly(gg2) %>% layout(
-      legend=list(x=0.7, y=0.05),font=list(family="consolas"),
-      margin=list(l=0, r=20, b=0, t=20, pad=4)
-    )
-    
+    output$pca2 <- renderPlotly({
+      gg = GPC()$gp + geom_point(
+        data = cbind(isolate(A()), GPC()$data) %>% filter(cos2 >= input$cos2), 
+        aes(x, y, label = id, size = buy_total_CT
+            , color = offer), 
+        alpha=0.65) + theme_bw()
+      
+      ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+        dragmode="pan", font=list(family="consolas"))
+    })
   })
   
   
-  GPC = reactive({
-    select(A(), offervalue:buy_total_LT) %>% 
-      PCA(graph=F) %>%
-      ggPCA() -> r.GPC
-  })
-  
-  
-  output$pca1 <- renderPlotly({
+  output$comb1 <- renderPlotly({
+    gdg <- ggplot(EMPC, aes(x=auc, y=EMPC, size = f1, label=st, col=model)) +
+      geom_point(aes(shape=encode), alpha=0.7) +
+      ggtitle("AUC v.s. EMPC for combination of preprocessing") +
+      scale_shape_manual(values=shapes) +
+      xlab("AUC score") +
+      ylab("EMPC score") +
+      guides(size = FALSE)
+      # theme(legend.position = "none") +
+      # geom_text_repel(aes(auc, EMPC, label=name),
+      #                size=3,point.padding = NA, force = 1,
+      #                box.padding=unit(0.5, "lines"), max.overlaps = 20,
+      #                ) +
+      # theme(legend.key.size = unit(0.5, "lines")) +
+      # theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) +
+      # annotate("text", x = 0.695, y = 381.755, label = "onehot+abs(#0.704, #381.75)") +
+      # annotate("text", x = 0.695, y = 381.71, label = "helmert+power(#0.714, #381.71)")
+
     
-    clrs = c("blue","seagreen","lightyellow","gold",
-             "orange","magenta","red","darkred")
-    
-    gg = GPC()$gp + geom_point(
-      data = cbind(A(), GPC()$data) %>% filter(cos2 >= input$cos2), 
-      aes(x, y, label = id, size = buy_total_CT
-          , color = buy_category_amount), 
-      alpha=0.65) +
-      scale_color_gradientn(colors=clrs) + theme_bw()
-    
-    ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+    ggplotly(gdg) %>% config(scrollZoom=TRUE) %>% layout(
       dragmode="pan", font=list(family="consolas"))
-    
   })
   
-  
-  output$pca2 <- renderPlotly({
-    gg = GPC()$gp + geom_point(
-      data = cbind(A(), GPC()$data) %>% filter(cos2 >= input$cos2), 
-      aes(x, y, label = id, size = buy_total_CT
-          , color = month), 
-      alpha=0.65) + theme_bw()
-    
-    ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+  output$comb2 <- renderPlotly({
+    ggb <- ggplot(EMP, aes(x=auc, y=EMPC, size = f1, col=model)) +
+      geom_point(aes(shape=re), alpha=0.7) +
+      scale_shape_manual(values=shapes) +
+      ggtitle("AUC v.s. EMPC for combination of preprocessing") +
+      xlab("AUC score") +
+      ylab("EMPC score") +
+      guides(size = FALSE, shape = FALSE)
+      #guides(size = FALSE) + 
+      #theme(legend.position = "none") + 
+      #geom_text_repel(aes(auc, EMPC, label=name),
+      #                 size=3,point.padding = NA, force = 1,
+      #                box.padding=unit(0.5, "lines"), max.overlaps = 20,
+      #                ) +
+      # theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) +
+      # annotate("text", x = 0.7102, y = 381.731, label = "(#0.711, #381.73)") +
+      # annotate("text", x = 0.711, y = 381.7295, label = "(#0.712, #381.73)")
+      # 
+    ggplotly(ggb) %>% config(scrollZoom=TRUE) %>% layout(
       dragmode="pan", font=list(family="consolas"))
   })
+  
+  
+  
+  
   
   
   
   output$tData <- renderDT({
     datatable(select(D1, input$col), rownames = FALSE,
-              options = list(autoWidth = TRUE))
+              options = list(autoWidth = TRUE, scrollX = TRUE),
+              filter =list(position = 'top', clear = TRUE, plain = TRUE))
   })
   
   
@@ -431,10 +512,12 @@ server<-function(input, output) {
                     quote = input$quote)
     
     if(input$disp == "head") {
-      datatable(head(df1))
+      datatable(head(df1),
+                options = list(autoWidth = TRUE, scrollX = TRUE))
     }
     else {
-      datatable(df1)
+      datatable(df1,
+                options = list(autoWidth = TRUE, scrollX = TRUE))
     }
     
   })

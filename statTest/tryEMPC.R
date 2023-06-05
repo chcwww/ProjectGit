@@ -1,4 +1,4 @@
-install.packages("ROCR")
+# install.packages("ROCR")
 library(ROCR)
 
 .empRocInfo <- function(scores, classes) {
@@ -93,12 +93,201 @@ empChurn <- function(scores, classes, alpha = 6, beta = 14, clv = 200, d = 10, f
 }
 
 
-preData <- read.csv("ordinal_none_none_xgboost (1).csv")
+preData <- read.csv("C://Users//chcww//Downloads//cvEncoder_pred_xgb.csv")
+aucData <- read.csv("C://Users//chcww//Downloads//cvEncoder_auc_f1_xgb.csv")
 
-y_test <- preData['y_test']
-pred <- preData['predictions']
+
+preData <- read.csv("C://Users//chcww//Downloads//onehot_std_smenn_logistic_pred.csv")
+aucData <- read.csv("C://Users//chcww//Downloads//cvResample_auc_f1_DecisionTree.csv")
+
+
+preData
+
+
+empChurn(preData[1], preData[2], clv = 4800)$EMP
+
+y_test <- preData['repeater']
+pred <- preData['none_none']
+colnames(preData)
 # acc <- mean(pred == y_test)
 
+EMPC <- NULL
+for (i in colnames(preData)[-length(colnames(preData))]) {
+  pred <- preData[i]
+  EMPC <- c(EMPC, empChurn(pred, y_test, clv = 4800)$EMP)
+}
+plot(EMPC)
+
+ds <- cbind(aucData, EMPC)
+write.csv(ds, "C://Users//chcww//Downloads//EMPCResample_DT.csv")
 
 
-empChurn(pred, y_test, clv = 100)
+
+
+name <- c('Logistic', 'MLP', 'SVM', 'Decision Tree', 'XGBoost', 'KNN')
+auc <- c(0.710656, 0.6977478, 0.7115313, 0.6095668, 0.6897046, 0.6626271)
+f1 <- c(381.7312, 381.7152, 381.7369, 381.7152, 381.7294, 381.7132)
+EMPC <- c(0.4873259, 0.4782265, 0.3866467, 0.4634007, 0.3498411, 0.476403)
+
+allData <- data.frame(name, auc, f1, EMPC)
+write.csv(allData, "C://Users//chcww//Downloads//EMPCModel.csv")
+
+
+EMPCEncode <- read.csv("C://Users//chcww//Downloads//project//EMPCOriginal_xgb.csv")
+
+
+a <- EMPCEncode$auc
+EMPCEncode['sa'] <- (a - mean(a)) / sd(a)
+b <- EMPCEncode$auc
+EMPCEncode['sb'] <- (b - mean(b)) / sd(b)
+EMPCEncode['check'] <- EMPCEncode['sa'] + EMPCEncode['sb']
+cc <- which.max(EMPCEncode$check)
+
+cc <- which.max(rank(EMPCEncode$auc) + rank(EMPCEncode$EMPC))
+
+
+tk <- cbind(EMPCEncode[cc, ][[3]], EMPCEncode[cc, ][[5]])
+
+tk <- paste0("(#", round(tk[1], 2), ", #", round(tk[2], 2), ")")
+
+# EMPCEncode['tot'] = ""
+# EMPCEncode[aa, 'tot'] = tk
+
+enc <- NULL
+nor <- NULL
+i<-1
+for (i in 1:length(EMPCEncode[[1]])) {
+  a <- as.data.frame(strsplit(EMPCEncode$name, "_"))[[i]]
+  enc <- c(enc, a[1])
+  nor <- c(nor, a[2])
+}
+EMPCEncode_new <- cbind(enc, nor, EMPCEncode[, c(2, 3, 4, 5)])
+colnames(EMPCEncode_new) <- c('encode', 'st', 'name', 'auc', 'f1', 'empc')
+
+
+library(ggplot2)
+library(ggrepel)
+
+aa <- which.max(EMPCEncode_new$auc)
+bb <- which.max(EMPCEncode_new$empc)
+
+
+k1 <- cbind(EMPCEncode_new[aa, ][[4]], EMPCEncode_new[aa, ][[6]])
+k2 <- cbind(EMPCEncode_new[bb, ][[4]], EMPCEncode_new[bb, ][[6]])
+
+t1 <- paste0("(*", round(k1[1], 2), ", ", round(k1[2], 2), ")")
+t2 <- paste0("(", round(k2[1], 2), ", *", round(k2[2], 2), ")")
+
+EMPCEncode_new['max'] = ""
+EMPCEncode_new[aa, 'max'] = t1
+EMPCEncode_new[bb, 'max'] = t2
+EMPCEncode_new[cc, 'max'] = tk
+
+
+shapes = c(6:14, 17, 18)[-5]
+
+
+gg <- ggplot(EMPCEncode_new, aes(x=auc, y=empc, size = f1, label=name, col=st)) +
+  geom_point(aes(shape = encode), alpha=0.7) + 
+  scale_shape_manual(values=shapes) +
+  ggtitle("AUC v.s. EMPC for combination of preprocessing        model: SVM") +
+  xlab("AUC score") +
+  ylab("EMPC score") 
+# +
+#   geom_text_repel(aes(auc, empc,
+#                       label=max),
+#                   size=5,point.padding = NA, force = 1, max.overlaps = 20
+#                   # box.padding=unit(0.5, "lines")
+#   )
+library(plotly)
+
+ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+  dragmode="pan", font=list(family="consolas"))
+
+
+# prediction <- prediction(pred, y_test)
+# perf <- performance(prediction, "tpr", "fpr")
+# perf
+# 
+# library(ggplot2)
+# 
+# g <- ggplot(chic, aes(x = y_test, y = temp))
+
+
+
+
+
+
+
+# # 加载R包，没有安装请先安装  install.packages("包名") 
+# library(pROC)
+# library(ggplot2)
+# 
+# # 读取ROC数据文件
+# 
+# # ROC计算
+# pp <- data.frame("y" = y_test, "p" = pred)
+# colnames(pp) <- c("y", "p")
+# rocobj <- roc(pp, y, p,
+#               # controls=df[,2][df[,1]=="Good"],  # 可以设置实验组或对照组
+#               # cases=df[,2][df[,1]=="Poor"],
+#               smooth = F       # 曲线是否光滑，当光滑时，无法计算置信区间
+# ) 
+# # 计算临界点/阈值
+# cutOffPoint <- coords(rocobj, "best")
+# cutOffPointText <- paste0(round(cutOffPoint[1],3),"(",round(cutOffPoint[2],3),",",round(cutOffPoint[3],3),")")
+# 
+# # 计算AUC值
+# auc<-auc(rocobj)[1]
+# # AUC的置信区间
+# auc_low<-ci(rocobj,of="auc")[1]
+# auc_high<-ci(rocobj,of="auc")[3]
+# 
+# # 计算置信区间
+# ciobj <- ci.se(rocobj,specificities=seq(0, 1, 0.01))
+# data_ci<-ciobj[1:101,1:3]
+# data_ci<-as.data.frame(data_ci)
+# x=as.numeric(rownames(data_ci))
+# data_ci<-data.frame(x,data_ci)
+# 
+# # 绘图
+# ggroc(rocobj,
+#       color="red",
+#       size=1,
+#       legacy.axes = F # FALSE时 横坐标为1-0 specificity；TRUE时 横坐标为0-1 1-specificity
+# )+
+#   theme_classic()+
+#   geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),        # 绘制对角线
+#                colour='grey',
+#                linetype = 'dotdash'
+#   ) +
+#   geom_ribbon(data = data_ci,                                # 绘制置信区间
+#               aes(x=x,ymin=X2.5.,ymax=X97.5.),               # 当legacy.axes=TRUE时， 把x=x改为x=1-x
+#               fill = 'lightblue',
+#               alpha=0.5)+
+#   geom_point(aes(x = cutOffPoint[[2]],y = cutOffPoint[[3]]))+ # 绘制临界点/阈值
+#   geom_text(aes(x = cutOffPoint[[2]],y = cutOffPoint[[3]],label=cutOffPointText),vjust=-1) # 添加临界点/阈值文字标签
+
+
+final <- NULL
+models <- c("DT", "knn", "logistic", "MLP", "svm", "xgb")
+
+for (model in models){ 
+  name <- paste0("C://Users//chcww//Downloads//project//EMPCResample_", model, ".csv")
+  catch <- read.csv(name)
+  catch$model <- model
+  final <- rbind(final, catch)
+}
+write.csv(final[, -1], "C://Users//chcww//Downloads//EMPCResample.csv")
+
+
+final <- NULL
+models <- c("DT", "knn", "logistic", "MLP", "svm", "xgb")
+
+for (model in models){ 
+  name <- paste0("C://Users//chcww//Downloads//project//EMPCOriginal_", model, ".csv")
+  catch <- read.csv(name)
+  catch$model <- model
+  final <- rbind(final, catch)
+}
+write.csv(final[, -1], "C://Users//chcww//Downloads//EMPCOriginal.csv")
